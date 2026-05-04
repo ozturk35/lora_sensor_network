@@ -39,6 +39,9 @@ static const char *TAG = "sx126";
 #define CMD_GET_RX_BUFFER_STATUS  0x13
 #define CMD_SET_SLEEP             0x84
 #define CMD_SET_PA_CONFIG         0x95
+#define CMD_SET_DIO3_AS_TCXO_CTRL 0x97
+#define CMD_CALIBRATE             0x89
+#define CMD_CALIBRATE_IMAGE       0x98
 
 /* IRQ bit masks */
 #define IRQ_TX_DONE   (1u << 0)
@@ -112,11 +115,24 @@ esp_err_t sx1262_init(sx1262_t *dev)
     /* SetStandby(STDBY_RC) */
     { uint8_t p[] = {0x00}; cmd2(dev, CMD_SET_STANDBY, p, 1); }
 
+    /* SetDio3AsTcxoCtrl(voltage=3.3V=0x07, startupDelay=5ms=0x000140) — powers TCXO via DIO3 */
+    { uint8_t p[] = {0x07, 0x00, 0x01, 0x40}; cmd2(dev, CMD_SET_DIO3_AS_TCXO_CTRL, p, 4); }
+    vTaskDelay(pdMS_TO_TICKS(10)); /* let TCXO stabilise before calibration */
+
+    /* Calibrate all blocks (RC64k, RC13M, PLL, ADC, image) with TCXO running */
+    { uint8_t p[] = {0x7F}; cmd2(dev, CMD_CALIBRATE, p, 1); }
+
+    /* SetStandby(STDBY_RC) again — clean state after calibration */
+    { uint8_t p[] = {0x00}; cmd2(dev, CMD_SET_STANDBY, p, 1); }
+
     /* SetPacketType(LoRa=0x01) */
     { uint8_t p[] = {0x01}; cmd2(dev, CMD_SET_PACKET_TYPE, p, 1); }
 
     /* SetRfFrequency: 868.0 MHz → word = 0x36400000 */
     { uint8_t p[] = {0x36, 0x40, 0x00, 0x00}; cmd2(dev, CMD_SET_RF_FREQ, p, 4); }
+
+    /* CalibrateImage for 863-870 MHz band — must run after frequency is set */
+    { uint8_t p[] = {0xD7, 0xD8}; cmd2(dev, CMD_CALIBRATE_IMAGE, p, 2); }
 
     /* SetDio2AsRfSwitchCtrl(enable=0x01) — critical for Wio SX1262 antenna switch */
     { uint8_t p[] = {0x01}; cmd2(dev, CMD_SET_DIO2_RF_SW_CTRL, p, 1); }
@@ -173,9 +189,11 @@ esp_err_t sx1262_transmit(sx1262_t *dev, const uint8_t *buf, uint8_t len)
 
     /* SetTx(timeout=0 — no timeout, rely on IRQ) */
     { uint8_t p[] = {0x00, 0x00, 0x00}; cmd2(dev, CMD_SET_TX, p, 3); }
+    vTaskDelay(pdMS_TO_TICKS(1));
+    ESP_LOGI(TAG, "SetTx issued, BUSY=%d (expect 1=transmitting)", gpio_get_level(SX_PIN_BUSY));
 
     /* Wait for TX_DONE (poll BUSY then GetIrqStatus) */
-    int64_t deadline = esp_timer_get_time() + 100000; /* 100 ms */
+    int64_t deadline = esp_timer_get_time() + 200000; /* 200 ms */
     while (1) {
         if (esp_timer_get_time() > deadline) {
             ESP_LOGE(TAG, "TX timeout");
