@@ -42,6 +42,7 @@ static const char *TAG = "sx126";
 #define CMD_SET_DIO3_AS_TCXO_CTRL 0x97
 #define CMD_CALIBRATE             0x89
 #define CMD_CALIBRATE_IMAGE       0x98
+#define CMD_GET_STATUS            0xC0
 
 /* IRQ bit masks */
 #define IRQ_TX_DONE   (1u << 0)
@@ -82,6 +83,16 @@ static void cmd2(sx1262_t *dev, uint8_t opcode, const uint8_t *params, int n)
     tx[0] = opcode;
     memcpy(&tx[1], params, n);
     spi_cmd(dev, tx, NULL, 1 + n);
+}
+
+/* Returns GetStatus byte: bits [6:4] = chipMode (2=STBY_RC,3=STBY_XOSC,4=FS,5=RX,6=TX) */
+static uint8_t get_chip_status(sx1262_t *dev)
+{
+    uint8_t tx[2] = {CMD_GET_STATUS, 0x00};
+    uint8_t rx[2] = {0};
+    spi_transaction_t t = { .length = 16, .tx_buffer = tx, .rx_buffer = rx };
+    spi_device_polling_transmit(dev->spi, &t);
+    return rx[1];
 }
 
 /* ─── Public API ────────────────────────────────────────────────────────── */
@@ -164,7 +175,8 @@ esp_err_t sx1262_init(sx1262_t *dev)
         cmd2(dev, CMD_SET_DIO_IRQ_PARAMS, p, 8);
     }
 
-    ESP_LOGI(TAG, "SX1262 init OK");
+    uint8_t st = get_chip_status(dev);
+    ESP_LOGI(TAG, "SX1262 init OK — chipMode=0x%X (expect 2=STBY_RC)", (st >> 4) & 0x7);
     return ESP_OK;
 }
 
@@ -189,21 +201,30 @@ esp_err_t sx1262_transmit(sx1262_t *dev, const uint8_t *buf, uint8_t len)
 
     /* SetTx(timeout=0 — no timeout, rely on IRQ) */
     { uint8_t p[] = {0x00, 0x00, 0x00}; cmd2(dev, CMD_SET_TX, p, 3); }
-    vTaskDelay(pdMS_TO_TICKS(1));
-    ESP_LOGI(TAG, "SetTx issued, BUSY=%d (expect 1=transmitting)", gpio_get_level(SX_PIN_BUSY));
+    vTaskDelay(pdMS_TO_TICKS(2));
+    /* Diagnostic: BUSY should be 1 while chip is transmitting */
+    int busy_after_tx = gpio_get_level(SX_PIN_BUSY);
+    uint8_t mode_after_tx = get_chip_status(dev);
+    ESP_LOGI(TAG, "after SetTx: BUSY=%d chipMode=0x%X (6=TX,2=STBY_RC)",
+             busy_after_tx, (mode_after_tx >> 4) & 0x7);
 
     /* Wait for TX_DONE (poll BUSY then GetIrqStatus) */
     int64_t deadline = esp_timer_get_time() + 200000; /* 200 ms */
     while (1) {
         if (esp_timer_get_time() > deadline) {
-            ESP_LOGE(TAG, "TX timeout");
+            uint16_t irq_at_timeout = sx1262_get_irq_status(dev);
+            uint8_t  st_at_timeout  = get_chip_status(dev);
+            ESP_LOGE(TAG, "TX timeout: BUSY=%d chipMode=0x%X irq=0x%04X",
+                     gpio_get_level(SX_PIN_BUSY),
+                     (st_at_timeout >> 4) & 0x7,
+                     irq_at_timeout);
             return ESP_ERR_TIMEOUT;
         }
         if (gpio_get_level(SX_PIN_BUSY)) continue;
         uint16_t irq = sx1262_get_irq_status(dev);
         if (irq & IRQ_TX_DONE) break;
         if (irq & IRQ_TIMEOUT) {
-            ESP_LOGE(TAG, "TX chip timeout");
+            ESP_LOGE(TAG, "TX chip timeout irq=0x%04X", irq);
             return ESP_ERR_TIMEOUT;
         }
     }

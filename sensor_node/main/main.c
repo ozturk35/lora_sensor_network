@@ -99,7 +99,10 @@ void app_main(void)
                    dht_data.temp_x10, dht_data.humi_x10, dht_ok,
                    bmp_data.pres_hpa, bmp_data.temp_x10, bmp_ok);
 
-    ESP_ERROR_CHECK(sx1262_transmit(&s_sx, (uint8_t *)&payload, sizeof(payload)));
+    esp_err_t tx_err = sx1262_transmit(&s_sx, (uint8_t *)&payload, sizeof(payload));
+    if (tx_err != ESP_OK) {
+        ESP_LOGE(TAG, "TX failed: %s — not sleeping, retrying next wake", esp_err_to_name(tx_err));
+    }
 
     /* ── Cleanup and sleep ─────────────────────────────────────────── */
     mq135_deinit(&s_mq);
