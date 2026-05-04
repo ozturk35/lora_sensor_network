@@ -236,18 +236,19 @@ esp_err_t sx1262_read_packet(sx1262_t *dev, uint8_t *buf, uint8_t *out_len)
 
     /* ReadBuffer(offset=buf_ptr) */
     wait_busy();
-    uint8_t tx2[2 + payload_len];
+    uint8_t tx2[3 + payload_len];
     tx2[0] = CMD_READ_BUFFER;
     tx2[1] = buf_ptr;
-    memset(&tx2[2], 0x00, payload_len);
-    uint8_t rx2[2 + payload_len];
+    tx2[2] = 0x00;  /* mandatory dummy byte — SX1262 outputs a third status byte here */
+    memset(&tx2[3], 0x00, payload_len);
+    uint8_t rx2[3 + payload_len];
     spi_transaction_t t2 = {
-        .length = (2 + payload_len) * 8,
+        .length = (3 + payload_len) * 8,
         .tx_buffer = tx2, .rx_buffer = rx2,
     };
     spi_device_polling_transmit(dev->spi, &t2);
-    /* rx2[0]=status, rx2[1]=NOP status, rx2[2..] = payload */
-    memcpy(buf, &rx2[2], payload_len);
+    /* rx2[0]=status, rx2[1]=status, rx2[2]=status, rx2[3..] = payload */
+    memcpy(buf, &rx2[3], payload_len);
     return ESP_OK;
 }
 

@@ -7,6 +7,7 @@ static const char *TAG = "disp";
 void display_manager_update(oled_t *oled, const decoded_payload_t *p,
                             int8_t rssi_dbm, int8_t snr_x4)
 {
+    oled_clear(oled);
     char line[22];
     float snr_db = snr_x4 / 4.0f;
 

@@ -91,7 +91,7 @@ void app_main(void)
     bool dht_ok = (dht22_read(&s_dht, &dht_data) == ESP_OK);
 
     /* ── Encode and transmit ───────────────────────────────────────── */
-    static uint8_t s_seq = 0;
+    static RTC_DATA_ATTR uint8_t s_seq = 0;
     lora_payload_t payload;
     payload_encode(&payload,
                    NODE_ID_SENSOR_1, s_seq++,
