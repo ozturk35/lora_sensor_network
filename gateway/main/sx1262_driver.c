@@ -38,6 +38,7 @@ static const char *TAG = "sx126";
 #define CMD_SET_BUFFER_BASE_ADDR  0x8F
 #define CMD_GET_RX_BUFFER_STATUS  0x13
 #define CMD_SET_SLEEP             0x84
+#define CMD_SET_PA_CONFIG         0x95
 
 /* IRQ bit masks */
 #define IRQ_TX_DONE   (1u << 0)
@@ -120,8 +121,11 @@ esp_err_t sx1262_init(sx1262_t *dev)
     /* SetDio2AsRfSwitchCtrl(enable=0x01) — critical for Wio SX1262 antenna switch */
     { uint8_t p[] = {0x01}; cmd2(dev, CMD_SET_DIO2_RF_SW_CTRL, p, 1); }
 
-    /* SetTxParams(power=+14dBm=0x16, rampTime=200µs=0x04) */
-    { uint8_t p[] = {0x16, 0x04}; cmd2(dev, CMD_SET_TX_PARAMS, p, 2); }
+    /* SetPaConfig(paDutyCycle=0x04, hpMax=0x07, deviceSel=0x00=SX1262, paLUT=0x01) */
+    { uint8_t p[] = {0x04, 0x07, 0x00, 0x01}; cmd2(dev, CMD_SET_PA_CONFIG, p, 4); }
+
+    /* SetTxParams(power=+14dBm=0x0E, rampTime=200µs=0x04) */
+    { uint8_t p[] = {0x0E, 0x04}; cmd2(dev, CMD_SET_TX_PARAMS, p, 2); }
 
     /* SetModulationParams(SF7=0x07, BW125=0x04, CR4/5=0x01, ldro=0x00) */
     { uint8_t p[] = {0x07, 0x04, 0x01, 0x00}; cmd2(dev, CMD_SET_MOD_PARAMS, p, 4); }

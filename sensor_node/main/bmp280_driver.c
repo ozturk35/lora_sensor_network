@@ -12,7 +12,7 @@ static const char *TAG = "bmp280";
 #define REG_CTRL_MEAS  0xF4
 #define REG_CONFIG     0xF5
 #define REG_PRESS_MSB  0xF7
-#define BMP280_CHIP_ID 0x60
+#define BMP280_CHIP_ID 0x58
 
 static esp_err_t reg_write(bmp280_t *dev, uint8_t reg, uint8_t val)
 {

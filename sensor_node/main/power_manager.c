@@ -20,5 +20,7 @@ void power_manager_sleep(int64_t active_start_us, uint32_t period_ms)
 
 esp_sleep_wakeup_cause_t power_manager_wakeup_cause(void)
 {
-    return esp_sleep_get_wakeup_cause();
+    uint32_t causes = esp_sleep_get_wakeup_causes();
+    if (causes & (1u << ESP_SLEEP_WAKEUP_TIMER)) return ESP_SLEEP_WAKEUP_TIMER;
+    return ESP_SLEEP_WAKEUP_UNDEFINED;
 }
