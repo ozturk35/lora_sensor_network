@@ -101,7 +101,8 @@ void app_main(void)
 
     esp_err_t tx_err = sx1262_transmit(&s_sx, (uint8_t *)&payload, sizeof(payload));
     if (tx_err != ESP_OK) {
-        ESP_LOGE(TAG, "TX failed: %s — not sleeping, retrying next wake", esp_err_to_name(tx_err));
+        ESP_LOGE(TAG, "TX failed: %s — hanging, check log above then reflash", esp_err_to_name(tx_err));
+        while (1) { vTaskDelay(pdMS_TO_TICKS(5000)); }  /* keep USB up for diagnostics */
     }
 
     /* ── Cleanup and sleep ─────────────────────────────────────────── */
